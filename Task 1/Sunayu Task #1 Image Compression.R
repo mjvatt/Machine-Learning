@@ -60,6 +60,7 @@ loadApp()
 
 # Import Image
 
+# Need to modify filepath if attempting to load image from another location
 image <- readPNG("C:/My Desktop/k means/Images/Satellite.png") # Read image into R
 
 class(image) # Ensure data was read in
