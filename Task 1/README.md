@@ -12,3 +12,17 @@ Find a way to compress an image to help combat this issue.
 ## Data set
 
 You may choose any image that is professionally reasonable to demonstrate a successful compression of an image using K-means clustering in R.
+
+## Compression Algorithm
+
+Here we will compress the image into compressed images with clusters of 2, 4, 8, 16, 32, 64, and 128. 
+
+This compression algorithm caused the original image chosen (Satellite.png) to go from 6.5MB to:
+
+- 2 clusters: 262KB
+- 4 clusters: 459KB
+- 8 clusters: 647KB
+- 16 clusters: 1.05MB
+- 32 clusters: 1.54MB
+- 64 clusters: 1.94MB
+- 128 clusters: 2.57MB
