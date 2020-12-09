@@ -1,0 +1,453 @@
+---
+title: "Sunayu Tech Task"
+author: "Michael Vatt"
+date: "`r format(Sys.Date(), '%d %b %y')`"
+output:
+  pdf_document:
+    toc: yes
+    toc_depth: 2
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+start_time <- Sys.time()
+```
+
+\
+
+```{r, include=FALSE}
+
+options(tinytex.verbose = TRUE)
+
+```
+
+\
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, results = 'hide', eval = TRUE}
+
+# Create a Function to Check for Installed Packages and Install if They Are Not Installed
+
+install <- function(packages){
+  new.packages <- packages[!(packages %in% installed.packages()[, "Package"])]
+  if (length(new.packages)) 
+    install.packages(new.packages, dependencies = TRUE, repos = "http://cran.us.r-project.org")
+  sapply(packages, require, character.only = TRUE)
+}
+ 
+# Install
+
+packages <- c("caTools", "car", "caret", "cluster", "Clustering", "corpus", "corrplot", "data.table", 
+              "dendextend", "doParallel", "dplyr", "e1071", "factoextra", "FactoMineR", "fpc", 
+              "GGally", "ggplot2", "ggthemes", "gridExtra", "kableExtra", "knitr", "ldatuning", 
+              "magrittr", "mclust", "NbClust", "petro.One", "plotly", "plotrix", "qdap", "qdapTools", 
+              "quanteda", "randomForest", "readxl", "RColorBrewer", "rlist", "RWeka", "scales", 
+              "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet", 
+              "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite", 
+              "wordcloud", "xlsx", "zoo")
+
+install(packages)
+
+```   
+
+\
+
+``` {r call libraries, echo = TRUE, results = 'hide'}
+
+# Call the installed packages
+
+#library(plyr) # plyr is required to be loaded before dplyr or issues may arise
+library(dplyr) # dplyr needed for efficient loading of loadApp()
+
+loadApp <- function() {
+  
+my_library <- c("caTools", "car", "caret", "cluster", "Clustering", "corpus", "corrplot", "data.table", 
+              "dendextend", "doParallel", "dplyr", "e1071", "factoextra", "FactoMineR", "fpc", 
+              "GGally", "ggplot2", "ggthemes", "gridExtra", "kableExtra", "knitr", "ldatuning", 
+              "magrittr", "mclust", "NbClust", "petro.One", "plotly", "plotrix", "qdap", "qdapTools", 
+              "quanteda", "randomForest", "readxl", "RColorBrewer", "rlist", "RWeka", "scales", 
+              "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet", 
+              "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite", 
+              "wordcloud", "xlsx", "zoo")
+
+install.lib <- my_library[!my_library %>% installed.packages()]
+
+for(lib in install.lib) install.packages(lib, dependencies = TRUE)
+
+sapply(my_library, require, character = TRUE)
+
+}
+
+loadApp()
+
+```
+
+# Overview of Multivariate Linear Regression Housing Prediction 
+
+This data set includes the following variables:
+\ 
+
+``` {r dataset variables, echo = FALSE}
+
+variables <- c("Income", "House_Age", "Number_Rooms", "Number_Bedrooms", "Area_Population", 
+                "Price", "Address")
+
+df <- data.frame(variables)
+kable(df, booktabs = T, col.names = "Variables") %>% kable_styling(latex_options = "striped")
+
+```
+
+## Objective
+
+This was a task issued by Sunayu as an evaluation of approach, style, ability, and performance. The R script will analyze a house price data set to predict the price of a house via different independent variables. It will move through data familiarization, preprocessing, splitting the training and testing data, exploratory data analysis, model evaluation, predictions, and results. The R Markdown report is the same script, maybe a little more refined, prettier, and a one stop shop to read the results. 
+
+## Dataset ##
+\
+
+``` {r split cores}
+
+split <- detectCores(TRUE)
+cl <- makePSOCKcluster(split)
+registerDoParallel(cl)
+
+```
+
+\
+
+``` {r load the dataset, echo = TRUE}
+
+dataset <- read.csv("https://raw.githubusercontent.com/huzaifsayed/Linear-Regression-Model-for-House-Price-Prediction/master/USA_Housing.csv")
+
+```
+
+# Familiarization
+
+Let's take an initial look to familiarize with the data set and to ensure it was properly read in.
+\
+
+``` {r familiarization, echo = TRUE}
+
+
+class(dataset) # Need to coerce into data frame if it is not
+dim(dataset) #  For familiarity and a quick visualization to determine if something went wrong
+summary(dataset) # Does anything look strange? Any variable(s) requiring pre-processing?
+str(dataset)  # There are 6 variables of numerical and 1 variable factor
+head(dataset) # Numerical variables need scaling? Should we not include any variables?
+colnames(dataset) <- c("Income", "House_Age", "Number_Rooms", "Number_Bedrooms", "Area_Population", 
+                       "Price", "Address") # For easier handling and better visualization
+names(dataset) # Ensure that the variable names changed
+
+
+```
+
+## Preprocessing ##
+
+Here, we will limit our regression model to the first 6 variable columns and remove *Address* for the predictions. *Address* would require encoding but since it would create 1 dummy variable per observation (5000), encoding would be trivial and inconsequential for a prediction.
+\
+
+``` {r preprocessing, echo = TRUE}
+
+# Let's Check for Missing Data
+
+data.frame(count_na_values <- colSums(is.na(dataset))) # Need to appraise if any greater than 0.
+
+# Split the Data set into a Training Set and Test Set
+
+set.seed(1234)
+val_ind <- createDataPartition(dataset$Price, times = 1, p = 0.2, list = FALSE) # Split 80/20
+train_set <- dataset[-val_ind,] # 4000 observations for training data
+test_set <- dataset[val_ind,] # 1000 observations to test upon
+
+# Let's Make Sure the Split Operated Correctly
+
+dim(train_set); dim(test_set) # 80% and 20% of the data set respectively
+class(train_set); class(test_set) # Should be data.frames
+
+# Remove Address From Data set for Prediction
+
+train_set <- train_set[,(1:6)] # Only keep numerical variables significant to the prediction
+test_set <- test_set[,(1:6)] # Only keep numerical variables significant to the prediction
+names(train_set); names(test_set) # Ensure proper variables were kept
+
+```
+
+# Methods and Analysis 
+
+## First Model ##
+\
+
+``` {r first model, echo = TRUE}
+
+## Model Will Not Need to Perform Feature Scaling - Linear Regression Function lm() 
+  ## Handles that Inherently
+
+# Fitting Multiple Linear Regression to the Training Set
+
+model1 <- lm(formula = Price ~ ., data = train_set) # Price is the dependent variable as a function 
+summary(model1)                                       # of all dependent variables via '.'
+
+## We see that Number_Bedrooms is not statistically significant
+  ## Would removing this variable aid prediction accuracy?
+
+# Using Fitted model1 for Predicting the Test Set Results
+
+y_pred1 <- predict(model1, newdata = test_set)
+visual_comparison <- data.frame(test_set$Price, y_pred1, residuals = test_set$Price - y_pred1)
+visual_comparison[1:10,]
+
+```
+
+Despite the model returning statistically significant p-value and R-squared values, we can see the model did not fit quite well on the test data set. Many of the predicted values have a noticeable difference. It is possible to make the model more robust and vigorous through more advanced models. Checking for multicollinearity may also help improve the algorithm.
+
+## Exploratory Data Analysis ##
+\
+
+``` {r EDA, message = FALSE, warning = FALSE}
+
+# Let's try to Evaluate Associations between Variables
+
+correlation <- cor(train_set)
+corrplot(correlation, method = "color")
+
+## Price is positively correlated with Income, House_Age, Number_Rooms, and Area_Population
+## Price has a slight positive correlation with Number_Bedrooms
+
+# Let's Make Scatter Plots to Determine the Relationship(s) between the Variables
+
+bedroom_plot <- ggplot(data = train_set, aes(x = Number_Bedrooms, y = Price)) + geom_jitter() +  
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Scatter plot of Bedrooms and Price", x = "Number of Bedrooms", y = "Price")
+
+bedroom_plot # We see that the relationship is linear
+
+income_plot <- ggplot(data = train_set, aes(x = Income, y = Price)) + geom_jitter() +  
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Scatter plot of Income and Price", x = "Income", y = "Price")
+
+income_plot # We see that the relationship is linear
+
+age_plot <- ggplot(data = train_set, aes(x = House_Age, y = Price)) + geom_jitter() +  
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Scatter plot of House Age and Price", x = "Age of House", y = "Price")
+
+age_plot # We see that the relationship is linear
+
+room_plot <- ggplot(data = train_set, aes(x = Number_Rooms, y = Price)) + geom_jitter() +  
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Scatter plot of Rooms and Price", x = "Number of Rooms", y = "Price")
+
+room_plot # We see that the relationship is linear
+
+pop_plot <- ggplot(data = train_set, aes(x = Area_Population, y = Price)) + geom_jitter() +  
+  geom_smooth(method = "lm", se = FALSE) + 
+  labs(title = "Scatter plot of Area Population and Price", x = "Area Population", y = "Price")
+
+pop_plot # We see that the relationship is linear
+
+# Evaluate Correlations Amongst Variables
+
+ggpairs(train_set, columns = c(1:6))
+
+## Correlation evaluation appears to support that Number_Bedrooms has a much lower correlation
+## and statistical significance towards Price. 
+
+# Check for Outliers
+
+ggplot(data = train_set) + geom_boxplot(aes(x = Number_Bedrooms, y = Price)) # Some outliers exist
+train_set_without_outliers <- train_set[-which(train_set$Price %in% 
+                                                 boxplot(train_set$Price, plot = FALSE)$out),]
+
+## There were 34 outliers, uncertain if their removal will significantly impact overall prediction
+
+# Visualize Outlier Differences
+
+rounded_without_outliers <- round(train_set_without_outliers)
+rounded_with_outliers <- round(train_set)
+
+plot1 <- ggplot(data = rounded_without_outliers, aes(x = Income, y = Price)) +
+  geom_point() + geom_smooth(method = lm) + xlim(0, 200000) + ylim(0, 2000000) + 
+  ggtitle("No Outliers")
+
+plot2 <- ggplot(data = rounded_with_outliers, aes(x = Income, y = Price)) +
+  geom_point() + geom_smooth(method = lm) + xlim(0, 200000) + ylim(0, 2000000) + 
+  ggtitle("With Outliers")
+
+grid.arrange(plot1, plot2, ncol = 2)
+
+```
+
+## Second Model ##
+
+Let's try our second model and see if it performs any better.
+\
+
+``` {r second model}
+
+# Fitting Multiple Linear Regression to the Training set Without Number_Bedrooms
+
+train_set_without_outliers <- train_set_without_outliers[,c(1:3,5:6)] # Remove Number_Bedrooms 
+
+model2 <- lm(formula = Price ~ ., data = train_set_without_outliers) # Price is the dependent 
+summary(model2)                         # variable as a function of all dependent variables via '.'
+
+
+## All independent variables are now statistically dependent. R-squared and p-values remain 
+## statistically significant, however, they both actually decreased by approximately 0.005
+
+# Using Fitted model2 for Predicting the Test Set Results
+
+y_pred2 <- predict(model2, newdata = test_set)
+visual_comparison2 <- data.frame(test_set$Price, y_pred2, residuals = test_set$Price - y_pred2)
+visual_comparison2[1:10,]
+
+```
+
+Predictions were slightly different but essentially returned no improvement. 
+
+## Influential Data Points ##
+
+Since there was essentially no improvement, let's detect influential data points with Cook's Distance to see if this may improve our model. 
+\
+
+``` {r influential, warning = FALSE, message = FALSE}
+
+# Let's Detect Influential Data Points with Cook's Distance
+# These are more influential than simple outliers
+
+cooksd <- cooks.distance(model2)
+mean(cooksd)
+
+plot(cooksd, main = "Influential Observations by Cook's Distance", 
+     xlim = c(0,5000), ylim = c(0,0.005))
+abline(h = 4 * mean(cooksd, na.rm=T), col = "green")  # Creates cutoff to find influential points
+text(x = 1:length(cooksd) + 1, y = cooksd, 
+     labels = ifelse(cooksd > 4 * mean(cooksd, na.rm = T), names(cooksd), ""), col = "red")  
+
+influential <- as.numeric(names(cooksd)[(cooksd > 4 * mean(cooksd, na.rm=T))])  
+      # influential row numbers
+head(train_set_without_outliers[influential, ]) # Take a peek at a few influntial observations
+
+train_set_without_outliers_influential <- train_set_without_outliers[-influential, ]
+nrow(train_set_without_outliers_influential)
+
+plot3 <- ggplot(data = rounded_without_outliers, aes(x = Income, y = Price)) + geom_point() + 
+  geom_smooth(method = lm) + xlim(0, 200000) + ylim(0, 2000000) +  ggtitle("Without Outliers")
+
+plot4 <- ggplot(data = train_set_without_outliers_influential, aes(x = Income, y = Price)) +
+  geom_point() + geom_smooth(method = lm) + xlim(0, 200000) + ylim(0, 2000000) + 
+  ggtitle("Without Outliers + Influential")
+
+grid.arrange(plot3, plot4, ncol = 2)
+
+```
+
+## Third Model ##
+
+Let's try our third model and see if it performs any better.
+\
+
+``` {r third model}
+
+# Fitting Multiple Linear Regression to the train_set3
+
+model3 <- lm(formula = Price ~ ., data = train_set_without_outliers_influential) # Price is the 
+summary(model3)                 #dependent variable as a function of all dependent variables via '.'
+
+
+## Initial review, model3 virtually fit the same as model2
+
+# Predicting the Test Set Results on train_set3
+
+y_pred3 <- predict(model3, newdata = test_set)
+visual_comparison3 <- data.frame(test_set$Price, y_pred3, residuals = test_set$Price - y_pred3)
+visual_comparison3[1:10,]
+
+```
+
+Predictions were slightly different but essentially no improvement still. This is likely due to the fact that we had 4000 observations in the training set where outliers and influential only accounted for 193 total observations. 
+
+- (model1 = 4000; model2 = 3966; model3 = 3807)
+
+Thus not enough change to influence the overall algorithm. Other models may be even more accurate if we attempted to remove other independent variables as well. 
+
+# Results 
+
+## Accuracy of the Models ##
+
+Since removing variables can be intensive and time-consuming, let's evaluate our models to see how accurately they performed. 
+\
+
+``` {r accuracy training sets}
+
+# Accuracy of the Models on the Different Training Sets
+
+pred1 <- model1$fitted.values
+pred2 <- model2$fitted.values
+pred3 <- model3$fitted.values
+
+tally_table <- data.frame(actual = train_set$Price, predicted = pred1)
+mape <- mean(abs(tally_table$actual - tally_table$predicted) / tally_table$actual)
+accuracy1 <- 1 - mape
+
+tally_table <- data.frame(actual = train_set_without_outliers$Price, predicted = pred2)
+mape <- mean(abs(tally_table$actual - tally_table$predicted) / tally_table$actual)
+accuracy2 <- 1 - mape
+
+tally_table <- data.frame(actual = train_set_without_outliers_influential$Price, predicted = pred3)
+mape <- mean(abs(tally_table$actual - tally_table$predicted) / tally_table$actual)
+accuracy3 <- 1 - mape
+
+mape_preds <- data.frame(Method_on_Training_Set = 
+                    c("Full Training Set", "Without Outliers", "Without Outliers + Influential"), 
+                    MAPE = percent(c(accuracy1, accuracy2, accuracy3)))
+kable(mape_preds, booktabs = T, col.names = c("Method", "MAPE")) %>% 
+  kable_styling(latex_options = "striped")
+
+
+```
+
+We see that model2 returned the greatest accuracy on the training set.
+\
+
+``` {r accuracy test set}
+
+# Accuracy on test_set
+
+tally_table_2 <- data.frame(actual = test_set$Price, predicted = y_pred1)
+mape_test <- mean(abs(tally_table_2$actual - tally_table_2$predicted) / tally_table_2$actual)
+accuracy_test1 <- 1 - mape_test
+
+tally_table_2 <- data.frame(actual = test_set$Price, predicted = y_pred2)
+mape_test <- mean(abs(tally_table_2$actual - tally_table_2$predicted) / tally_table_2$actual)
+accuracy_test2 <- 1 - mape_test
+
+tally_table_2 <- data.frame(actual = test_set$Price, predicted = y_pred3)
+mape_test <- mean(abs(tally_table_2$actual - tally_table_2$predicted) / tally_table_2$actual)
+accuracy_test3 <- 1 - mape_test
+
+mape_preds_test <- data.frame(Method_on_Test_Set = c("Full Training Set", "Without Outliers", 
+                                                     "Without Outliers + Influential"), 
+                    MAPE = percent(c(accuracy_test1, accuracy_test2, accuracy_test3)))
+kable(mape_preds_test, booktabs = T, col.names = c("Method", "MAPE")) %>% 
+  kable_styling(latex_options = "striped")
+
+```
+
+# Conclusion
+
+We see that the accuracy values on the test set were virtually the same for each model. Since the accuracy was relatively high, it may not be worth the time spent on testing other models with different independent variable combinations. 
+\
+
+``` {r session info}
+
+sessionInfo()
+
+```
+
+``` {r runtime, echo = FALSE}
+
+end_time <- Sys.time()
+runtime <- end_time - start_time
+runtime
+stopCluster(cl) # Stops Parallel Processing
+
+```
