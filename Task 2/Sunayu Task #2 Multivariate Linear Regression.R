@@ -5,27 +5,27 @@
   # Algorithm to install packages left in the script in case it was needed. 
 
 
-# # Create a Function to Check for Installed Packages and Install if They Are Not Installed
-# 
-# install <- function(packages){
-#   new.packages <- packages[!(packages %in% installed.packages()[, "Package"])]
-#   if (length(new.packages)) 
-#     install.packages(new.packages, dependencies = TRUE, repos = "http://cran.us.r-project.org")
-#   sapply(packages, require, character.only = TRUE)
-# }
-# 
-# # Install
-# 
-# packages <- c("caTools", "car", "caret", "cluster", "Clustering", "corpus", "corrplot", "data.table", 
-#               "dendextend", "doParallel", "dplyr", "e1071", "factoextra", "FactoMineR", "fpc", 
-#               "GGally", "ggplot2", "ggthemes", "gridExtra", "kableExtra", "knitr", "ldatuning", 
-#               "magrittr", "mclust", "NbClust", "petro.One", "plotly", "plotrix", "qdap", "qdapTools", 
-#               "quanteda", "randomForest", "readxl", "RColorBrewer", "rlist", "RWeka", "scales", 
-#               "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet", 
-#               "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite", 
-#               "wordcloud", "xlsx", "zoo")
-# 
-# install(packages)
+# Create a Function to Check for Installed Packages and Install if They Are Not Installed
+
+install <- function(packages){
+  new.packages <- packages[!(packages %in% installed.packages()[, "Package"])]
+  if (length(new.packages))
+    install.packages(new.packages, dependencies = TRUE, repos = "http://cran.us.r-project.org")
+  sapply(packages, require, character.only = TRUE)
+}
+
+# Install
+
+packages <- c("caTools", "car", "caret", "cluster", "Clustering", "corpus", "corrplot", "data.table",
+              "dendextend", "doParallel", "dplyr", "e1071", "factoextra", "FactoMineR", "fpc",
+              "GGally", "ggplot2", "ggthemes", "gridExtra", "kableExtra", "knitr", "ldatuning",
+              "magrittr", "mclust", "NbClust", "petro.One", "plotly", "plotrix", "qdap", "qdapTools",
+              "quanteda", "randomForest", "readxl", "RColorBrewer", "rlist", "RWeka", "scales",
+              "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet",
+              "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite",
+              "wordcloud", "xlsx", "zoo")
+
+install(packages)
 
 
 
@@ -34,31 +34,30 @@
 
 
 
-# # Call the installed packages
-# 
-# #library(plyr) # plyr is required to be loaded before dplyr or issues may arise
-# library(dplyr) # dplyr needed for efficient loading of loadApp()
-# 
-# loadApp <- function() {
-#   
-#   my_library <- c("caTools", "car", "caret", "cluster", "Clustering", "corpus", "corrplot", "data.table", 
-#                   "dendextend", "doParallel", "dplyr", "e1071", "factoextra", "FactoMineR", "fpc", 
-#                   "GGally", "ggplot2", "ggthemes", "gridExtra", "kableExtra", "knitr", "ldatuning", 
-#                   "magrittr", "mclust", "NbClust", "petro.One", "plotly", "plotrix", "qdap", "qdapTools", 
-#                   "quanteda", "randomForest", "readxl", "RColorBrewer", "rlist", "RWeka", "scales", 
-#                   "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet", 
-#                   "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite", 
-#                   "wordcloud", "xlsx", "zoo")
-#   
-#   install.lib <- my_library[!my_library %>% installed.packages()]
-#   
-#   for(lib in install.lib) install.packages(lib, dependencies = TRUE)
-#   
-#   sapply(my_library, require, character = TRUE)
-#   
-# }
-# 
-# loadApp()
+# Call the installed packages
+
+library(dplyr) # dplyr needed for efficient loading of loadApp()
+
+loadApp <- function() {
+
+  my_library <- c("caTools", "car", "caret", "cluster", "Clustering", "corpus", "corrplot", "data.table",
+                  "dendextend", "doParallel", "dplyr", "e1071", "factoextra", "FactoMineR", "fpc",
+                  "GGally", "ggplot2", "ggthemes", "gridExtra", "kableExtra", "knitr", "ldatuning",
+                  "magrittr", "mclust", "NbClust", "petro.One", "plotly", "plotrix", "qdap", "qdapTools",
+                  "quanteda", "randomForest", "readxl", "RColorBrewer", "rlist", "RWeka", "scales",
+                  "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet",
+                  "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite",
+                  "wordcloud", "xlsx", "zoo")
+
+  install.lib <- my_library[!my_library %>% installed.packages()]
+
+  for(lib in install.lib) install.packages(lib, dependencies = TRUE)
+
+  sapply(my_library, require, character = TRUE)
+
+}
+
+loadApp()
 
 
 # Import Data set
