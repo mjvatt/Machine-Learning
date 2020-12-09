@@ -1,8 +1,6 @@
 # Image Compression using K-means clustering in R
 
-This was a task issued by Sunayu as an evaluation of approach, style, ability, and performance. 
-The R script will compress an image successfully by removing some information without losing the overall detail.  
-Thus, the image will require less memory for storage, interpretation, and it still remains meaningful and informative.
+This was a task issued by Sunayu as an evaluation of approach, style, ability, and performance. The R script will compress an image successfully by removing some information without losing the overall detail. Thus, the image will require less memory for storage, interpretation, and it still remains meaningful and informative.
 
 ## Problem Statement 
 
