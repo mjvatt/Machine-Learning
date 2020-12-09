@@ -1,5 +1,3 @@
-# Sunayu
-
 # Multivariate Linear Regression House Price Prediction
 
 This was a task issued by Sunayu as an evaluation of approach, style, ability, and performance. The R script will analyze a house price data set to predict the price of a house via different independent variables. It will move through data familiarization, preprocessing, splitting the training and testing data, exploratory data analysis, model evaluation, predictions, and results. The R Markdown report is the same script, maybe a little more refined, prettier, and a one stop shop to read the results. 
