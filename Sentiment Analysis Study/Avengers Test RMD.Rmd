@@ -1,0 +1,659 @@
+---
+title: "Sentiment Analysis  \n*Twitter Proof of Concept for Surveys: Avengers Endgame*"
+author: "Michael Vatt"
+date: "`r format(Sys.Date(), '%d %b %y')`"
+output:
+  pdf_document: 
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+header-includes: \usepackage{xcolor}
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dev = 'pdf')
+start_time <- Sys.time()
+buf_size=200000
+
+```
+
+```{r, include = FALSE}
+
+options(tinytex.verbose = TRUE)
+
+```
+# Installation 
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, results = 'hide', eval = TRUE}
+
+# Create a Function to Check for Installed Packages and Install if They Are Not Installed
+
+install <- function(packages){
+  new.packages <- packages[!(packages %in% installed.packages()[, "Package"])]
+  if (length(new.packages)) 
+    install.packages(new.packages, dependencies = TRUE, repos = "http://cran.us.r-project.org")
+  sapply(packages, require, character.only = TRUE)
+}
+ 
+# Install
+
+packages <- c("caret", "corpus", "data.table", "dendextend", "doParallel", "dplyr", "e1071", 
+              "ggplot2", "ggthemes","knitr", "ldatuning", "magrittr", "petro.One", "plotly", 
+              "plotrix", "qdap", "quanteda", "randomForest", "RColorBrewer", "rlist", "RWeka", 
+              "scales", "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet", 
+              "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite", 
+              "wordcloud", "xlsx")
+
+install(packages)
+
+```  
+
+``` {r call libraries, echo = TRUE, results = 'hide'}
+
+# Call the installed packages
+
+loadApp <- function() {
+  
+my_library <- c("caret", "corpus", "data.table", "dendextend", "doParallel", "dplyr", "e1071", 
+              "ggplot2", "ggthemes","knitr", "ldatuning", "magrittr", "petro.One", "plotly", 
+              "plotrix", "qdap", "quanteda", "randomForest", "RColorBrewer", "rlist", "RWeka", 
+              "scales", "SentimentAnalysis", "sentimentr", "SnowballC", "stm", "stringr", "syuzhet", 
+              "tensorflow", "tidyr", "tidytext", "tidyverse", "tm", "topicmodels", "viridisLite", 
+              "wordcloud", "xlsx")
+
+install.lib <- my_library[!my_library %>% installed.packages()]
+
+for(lib in install.lib) install.packages(lib, dependencies = TRUE)
+
+sapply(my_library, require, character = TRUE)
+
+}
+
+loadApp()
+
+```
+
+# Overview
+
+This white paper was motivated by [redacted] use of surveys as a major cost to the organization. Collecting feedback is critical to an organization's success, however, simply receiving feedback without translation and examination is uninformative and inconsequential. Therefore, surveys necessitate extensive labor hours to comb through their responses. This includes evaluation of possible classified information, the need to redact pieces of information, extreme language, and basic level exploratory analysis. The sentiments from open-ended questions require much more effort than those based upon Likert scales or Yes/No questions. Individuals are required to read each comment one by one. Resulting in the possible introduction of bias, inefficiencies, and inconsistencies to the area of sentiment analysis (SA). The goal is to provide a benefit to the Office of Human Resources (OHR) through this proof of concept. 
+
+Fortunately, the advancements of machine learning (ML) and artificial intelligence (AI) have developed and curated techniques and sometimes curated lexicons to evaluate sentiments of items comparable to surveys (e.g., Twitter tweets, Amazon Reviews). Combing through survey data and its respective comments is analogous to evaluating Twitter sentiments - the processes and methodologies are parallel and commensurate. 
+
+## Introduction
+
+This ML algorithm is a proof of concept utilizing *real* Twitter data, in the form of tweets, as an analogous concept to survey data. Both can be large data sets populated with open-ended text statements utilizing natural language and emotional expressions. This dataset was motivated by exploratory data analysis to see if it may improve OHR processes in responding to the amount of the agency's survey data and its importance, in multiple structures and platforms compared to historical and laborious performance methods. 
+
+Advances in ML have permitted a fast and efficient way of combing natural language to detect emotions, keywords, ideas, and sentiment. While we will explore all of those, sentiment is the desired target information for this white paper. 
+
+## What is Sentiment Analysis? 
+
+SA involves ML to computationally analyze writings (i.e., survey comments, tweets, opinions) and categorize their expressions as "positive", "negative", or "neutral". These models can aid any Human Resources office to determine how well the agency is performing - possibly identifying defects, recommended improvements, or strategy issues. 
+
+Part of this white paper is to determine if the ML model can accurately predict a comment's sentiment. 
+
+Classically, SA was done through active, but laborious, surveys - in-person and telephonic were the most common. As computers became more mainstream through advancements, so did SA - we just did not recognize it as such. This was done through simple surveys and simple calculations. Open-ended questions necessitated primitive methods to tackle the individual circumstances of every single survey collected. Open-ended questions lack the ability for true and consistent structure - due to the apparent stochastic behavior of respondents - processing of natural language demanded improved capabilities and techniques. 
+
+## Model Design
+
+This model's will draw from 15,000 tweets with reference to the box-office hit *Avengers: Endgame*. 
+
+Evaluating a collection of Tweets from Twitter may show a deeper, more accurate representation of sentiment regarding specific topics that would be difficult to collect elsewhere - if not impossible. 
+
+Lexicons have been developed and curated via open-source methods that aid in the discovery and investigation of SA on data sets - here, we will use *syuzhet*, *afinn*, *bing*, and *nrc*. Some may have less interoperability and are more restrictive. 
+
+From there, we will analyze the tweets, clean up the tweets in order to evaluate words that matter, remove unnecessary words, signs, numbers, and items like URLs. 
+
+*WARNING:*
+
+This is an entirely *real* data set retrieved from Twitter. *Personally identifiable information (PII) may not be completely removed by the algorithm*. If PII remains in the data set, this is wholly unintentional. The data set is 100% publicly available information, thus, excluded from human subjects research protection requirements and free to use. In addition, PII is not the desired object of information and is therefore meaningless to this algorithm's outputs. However, be aware that this is real data from Twitter, and as such, there is always a risk that it may contain PII, profanity, or other offensive content. 
+
+This dataset includes the following variables:
+\ 
+
+``` {r dataset variables, echo = FALSE}
+
+variables1 <- c("Label", "Text (Tweet)", "senti (Sentiment)", "s_score (Sentiment Score)") 
+df <- data.frame(variables1)
+knitr::kable(df)
+
+```
+
+## Objective
+
+With the help of ML, our objective is to uncover possibilities of detecting sentiment from Twitter data (analogous to survey data). Ultimately resulting in meaningful input to the feedback system. There is a bias against using open-ended statements in feedback, possibly because they appear to be *noise* in the data or that they are *fruitless* and *inconvenient* data points. Due to their unstructured format and stochastic behavior, it creates a dilemma of weighing "pros-and-cons" to determine the benefit of spending the time to evaluate the statements. This white paper endeavors to discover the possibility of lowering labor costs, discovering hidden insights, and illustrate results that are both informative and substantive. 
+
+## Dataset ##
+
+``` {r split cores}
+
+split <- detectCores(TRUE)
+split # To Make Sure it Worked
+cl <- makePSOCKcluster(split)
+registerDoParallel(cl)
+
+```
+
+Let’s download the data set from a .csv file and place it into a data frame:
+\
+
+``` {r load the dataset, echo = FALSE}
+
+tweet <- read.csv("C:/My Desktop/OHR/Projects/Sentiment Analysis White Paper/Twitter/avengers tweets.csv", 
+                  stringsAsFactors = FALSE)
+
+```
+
+# Methods and Analysis 
+
+## Exploratory Data Analysis 
+
+Now let's gain some familiarization with the data set and view the first few rows.
+\
+
+``` {r data familiarization}
+
+# Check Initial Shape of Data Frame
+
+dim(tweet)
+
+# Remove Unnecessary Columns
+
+tweet <- tweet[,-3:-17]
+
+# What Shape is the Data Frame?
+
+dim(tweet) # Dimensions of the Dataframe For Familiarity - This is Correct
+
+## Structure of Data Frame 
+
+str(tweet) # Notice that Some Columns Are Not The Same Class
+class(tweet) # Let's Ensure it is Correct Format
+
+```
+
+We now need to perform a little bit of pre-processing to change column names, character data types to factors, create a data partition, and start the sentiment analysis process. 
+\
+
+``` {r pre-processing, warning = FALSE}
+
+# Column Names to Data Frame
+
+colnames(tweet) <- c("label","text")
+
+kable(tweet[4:8,], format = "markdown", align = "cc") # Does the Data Look Right? - Yes
+
+# Changing Label From Char to Factor Form
+
+tweet$label <- factor(tweet$label)
+
+### Splitting Big Data File to 1/50 of i-th's Size
+
+ind <- createDataPartition(tweet$label, p = 1/50, list = FALSE)
+tweet1 <- tweet[ind,]
+
+```
+
+## Sentiment Analysis
+
+Let's evaluate those 5 example tweets from above and see if we can predict their individual sentiment qualities. 
+\
+
+``` {r SA individual, warning = FALSE}
+
+senti_analysis <- analyzeSentiment(tweet1$text)
+kable(senti_analysis[1:5,-5:-11], digits = 3)
+
+sentiment <- convertToDirection(senti_analysis$SentimentQDAP)
+tweet1$senti <- sentiment
+
+#plotSentiment(senti_analysis$SentimentQDAP, response)
+plotSentiment(senti_analysis$SentimentQDAP)
+
+```
+
+Now let's use those sentiment scores to provide an overall sentiment per tweet. 
+\
+
+``` {r SA overall, warning = FALSE}
+
+tweet1$s_score <- senti_analysis$PositivityQDAP - senti_analysis$NegativityQDAP
+
+kable(tweet1[4:8,], format = "markdown", digits = 2)
+
+str(tweet1)
+
+kable(round(prop.table(table(tweet1$senti)), 3))
+#kable(wes2, col.names = c("Sentiment", "Frequency")) %>% kable_styling("striped") %>% row_spec(1, color = "red") %>% 
+#  row_spec(3, color = "blue")
+
+#kable(wes2, booktabs = T) %>% kable_styling(latex_options = "striped") %>% 
+#  row_spec(1, color = "red") %>% row_spec(3, color = "green")
+
+```
+
+## Natural Language Processing
+
+Here, we need to clean up the text that is in the tweets. This is more extensive than it may sound due to the esoteric nature of Twitter - involving specific syntax, high use of slang, or obtuse messaging.  
+
+This will use an example tweet to show the difference between an originally published tweet and a processed tweet. 
+
+First, in order properly utilize the words from the tweets, we have to create a Vector Source that will allow us to create a Volatile Corpora. This sounds worse than it is. It is simply how the data is stored on the computer. A Volatile Corpus (VCorpus) will use the RAM's memory rather than the disk memory (hard drive) of the computer as it would if we used a Permanent Corpus (PCorpus). Basically, it is a temporary object and the data will be erased when the object is destroyed - thus, is more efficient and less taxing.
+
+A corpus is the plural of corpora, simply means a collection of written texts.
+
+Now, we can clean the corpus of anything that is either unnecessary, not helpful, problematic, and/or not words. This includes items, such as: punctuation, URLs, unnecessary spaces, numbers, and we can lowercase everything to make the analysis much more efficient and simpler.
+\
+
+``` {r natural language processing}
+
+## Loading required package: NLP
+
+corpus <- VCorpus(VectorSource(tweet1$text))
+
+# A Snap Shot of the First Text Stored in the Corpus
+
+comparison <- data.frame(1, stringsAsFactors = FALSE)
+
+comparison[1,] <- as.character(corpus[[623]])
+
+NumPunct <- function(x) gsub("[^[:alpha:][:space:]]*","",x)
+removeURL <- function(x) gsub("http[^[:space:]]*","",x)
+toSpace <- content_transformer(function (x , pattern ) gsub(pattern, " ", x))
+corpus_clean <- tm_map(corpus, toSpace, "/")
+corpus_clean <- tm_map(corpus_clean, toSpace, "@")
+corpus_clean <- tm_map(corpus_clean, toSpace, "\\|")
+corpus_clean <- tm_map(corpus_clean, content_transformer(tolower))
+corpus_clean <- tm_map(corpus_clean, content_transformer(removeURL))
+corpus_clean <- tm_map(corpus_clean, content_transformer(NumPunct))
+corpus_clean <- tm_map(corpus_clean, removeNumbers)
+corpus_clean <- tm_map(corpus_clean, removeWords, c(stopwords("en"), "tco", "avengersendgame", 
+                      "marvel", "avengers", "man", "premiere", "ads", "qlnfejsx", "helloboon", 
+                      "everywhere", "vlpepnxygm", "qnsmdcdm", "uufef", "going", "szfbsggq", "uff", 
+                      "httpstcoq", "ejsx", "the", "httpstco", "avengersendgam", "marvel", 
+                      "avengers", "man", "premiere", "ads", "ejsx", "helloboon", "lnf", "the",
+                      "win", "originalfunko", "get", "paytm", "just", "httpstcos", "zfbsggq"))
+corpus_clean <- tm_map(corpus_clean, removePunctuation)
+corpus_clean <- tm_map(corpus_clean, stripWhitespace)
+corpus_clean <- tm_map(corpus_clean, removeWords, letters)
+
+# To Ensure Language is Still There and No Issues Have Arisen
+
+comparison[2,] <- as.character(corpus_clean[[623]])
+comparison[1,2] <- "Published Tweet: "
+comparison[2,2] <- "Processed Tweet: "
+comparison <- comparison[, 2:1]
+kable(comparison, format = "markdown")
+
+
+```
+
+We can see above the condition from the published tweet to the processed tweet has changed quite a bit. It may also seem strange and nonsensical when read normally - that is ok. We are removing words that either provide no help, meaningless, or are far too common (e.g., 'the'). Thus, the leftover words have some sort of sentiment, whether it is positive, negative, or neutral. 
+
+Below, we will build the term-document matrix (TDM) in order to identify the frequency of words in the data set. The TDM will also be utilized in order to find out how many terms and documents we have in the matrix and determine what the sparsity of those terms are. Once this is complete, we can remove sparse terms - meaning, the removal of words that have very little meaning or input into the SA. 
+
+A TDM is a way of representing the words in the text as a table (or matrix) of numbers. The rows of the matrix represent the text responses to be analyzed, and the columns of the matrix represent the words from the text that are to be used in the analysis. The most basic version is binary.
+
+The function, *removeSparseTerms()*, simply refers to the threshold of *relative document frequency* for a term, *above which* the term will be removed.
+\
+
+``` {r exploratory analysis and term document matrix, warning = FALSE}
+
+# Build a Term-Document Matrix
+
+corpus_clean_tdm <- TermDocumentMatrix(corpus_clean)
+tdm_sparse <- removeSparseTerms(corpus_clean_tdm, 0.99)
+tdm_matrix <- as.matrix(tdm_sparse)
+
+inspect(corpus_clean_tdm)
+inspect(tdm_sparse)
+
+# Sort by Descending Value of Frequency
+
+tdm_value <- sort(rowSums(tdm_matrix), decreasing = TRUE)
+tdm_df <- data.frame(word = names(tdm_value), freq = tdm_value)
+
+# Display Top 5 Most Frequent Words
+
+kable(tdm_df[1:5,], format = "markdown")
+#head(tdm_df,5)
+
+# Plot the Most Frequent Words
+
+barplot(tdm_df[1:10,]$freq, las = 2, names.arg = tdm_df[1:10,]$word,
+        col = rainbow(10), main ="Top 10 Most Frequent Words",
+        ylab = "Word Frequencies")
+
+# Generate Word Cloud
+
+set.seed(1234)
+wordcloud(words = tdm_df$word, freq = tdm_df$freq, min.freq = 5,
+          max.words = 100, random.order = FALSE, rot.per = 0.40, 
+           scale = c(3,0.5), colors = brewer.pal(8, "Dark2"))
+
+```
+
+Next, we will use *findAssocs()* to test three arbitrary words to see whether there are words that are associated with them with a minimum correlation of 35% - if it were 100%, they would *always* be associated with each other. 
+
+After, we will find associations that occur at least 300 times with a minimum correlation of 50%.
+\
+
+``` {r find associations}
+
+# Find Associations of at least 35%
+
+findAssocs(corpus_clean_tdm, terms = c("home","bed","stop"), corlimit = 0.35)
+
+# Find Associations For Words That Occur at Least 300 Times and at least 50%
+
+findAssocs(corpus_clean_tdm, terms = findFreqTerms(corpus_clean_tdm, lowfreq = 300)[8:15], 
+           corlimit = 0.50)
+
+```
+
+Now, we will employ the *syuzhet* package. This has abilities to extract sentiment and sentiment-derived plot arcs from text using a variety of sentiment dictionaries conveniently packaged. Syuzhet was developed by the Nebraska Literary Lab and is the default for extracting sentiment in the package. The three others are : *afinn* developed by Finn Nielsen, *bing* developed by Minqing Hu and Bing Liu, and *nrc* developed by Saif Mohammad and Peter Turney of the National Research Council of Canada. The package provides several methods for plot arc normalization. 
+
+The *syuzhet* package attempts to reveal the latent structure of narratives by means of SA. Instead of detecting shifts in the topic or subject matter of the narrative, it reveals the emotional shifts that serve as proxies for the narrative movement.
+\
+
+``` {r syuzhet score}
+
+# Regular Sentiment Score Using get_sentiment() Function and Others
+# NOTE: Different Methods May Have Different Scales
+
+tweet2 <- as.character(tweet)
+tweet_sub2 <- tweet2[2]
+head(tweet2)
+class(tweet_sub2)
+syuzhet_vector <- get_sentiment(tweet2, method = "syuzhet")
+
+# See the First Row of the Vector
+
+syuzhet_vector
+
+# See Summary Statistics of the Vector
+
+summary(syuzhet_vector)
+
+```
+
+The *get_sentiment()* function will assess the sentiment of each word or sentence. It takes two arguments: a character vector and a method of evaluation. The method will determine which of the sentiment lexicon methods to employ. Unfortunately the Stanford method was sidelined due to persistent errors and not used for this concept.  
+
+Each method will evaluate the sentiment with a slightly different scale and may return different results. Therefore, we should compare the results of their overall sign to check for large discrepancies - if any exist. 
+\
+
+``` {r different scores, warning = FALSE}
+
+# Bing
+
+bing_vector <- get_sentiment(tweet2, method = "bing")
+head(bing_vector)
+summary(bing_vector)
+
+# Affin
+
+afinn_vector <- get_sentiment(tweet2, method = "afinn")
+head(afinn_vector)
+summary(afinn_vector)
+
+# NRC
+
+nrc_vector <- get_sentiment(tweet2, method = "nrc", lang = "english")
+head(nrc_vector)
+summary(nrc_vector)
+
+```
+
+Above, we can see that the syuzhet method returned (`r max(syuzhet_vector)`), suggesting that the overall sentiment was really positive. The mean  (`r mean(syuzhet_vector)`) and median (`r median(syuzhet_vector)`) support this. 
+
+Bing returned much smaller numbers, max (`r max(bing_vector)`) mean (`r mean(bing_vector)`) and median (`r median(bing_vector)`) are still positive. 
+
+Afinn returned larger numbers, max (`r max(afinn_vector)`) mean (`r mean(afinn_vector)`) and median (`r median(afinn_vector)`) are also positive. 
+
+NRC returned similar numbers, max (`r max(nrc_vector)`) mean (`r mean(nrc_vector)`) and median (`r median(nrc_vector)`) are also positive. 
+
+The signs of each succinctly show this as well below. 
+
+The fact that the min of each method were all zero show the distribution was overwhelmingly positive - granted these are tweets about the mega-hit Avengers: Endgame movie. Therefore, it could have been surmised that this was likely to be positive due to the topic being covered. 
+\
+
+``` {r signs}
+
+# Compare the First Row of Each Vector Using Sign Function
+
+rbind(
+  sign(head(syuzhet_vector)),
+  sign(head(bing_vector)),
+  sign(head(afinn_vector)),
+  sign(head(nrc_vector))
+)
+
+```
+
+But we can further evaluate the overall sentiment over each tweet individually (positive or negative) and classify each tweet with an overall emotion ranging from: Anger, Anticipation, Disgust, Fear, Joy, Sadness, Surprise, Trust. 
+
+``` {r nrc sentiment, warning = FALSE}
+
+# Run NRC Sentiment Analysis to Return Data Frame With Each Row Classified as One of the Following
+# Emotions, Rather than a Score: 
+# Anger, Anticipation, Disgust, Fear, Joy, Sadness, Surprise, Trust 
+# It Also Counts the Number of Positive and Negative Emotions Found in Each Row
+
+d <- get_nrc_sentiment(tweet_sub2)
+
+# Head(d,10) - To See Top 10 Lines of the get_nrc_sentiment Data Frame
+
+kable(head(d,10))
+
+# Transpose
+
+td <- data.frame(t(d))
+
+# The Function rowSums Computes Column Sums Across Rows for Each Level of a Grouping Variable.
+
+td_new <- data.frame(rowSums(td))
+
+# Transformation and Cleaning
+
+names(td_new)[1] <- "count"
+td_new <- cbind("sentiment" = rownames(td_new), td_new)
+rownames(td_new) <- NULL
+td_new2<-td_new[1:10,]
+
+# Plot One - Count of Words Associated With Each Sentiment
+
+qplot(sentiment, data = td_new2, weight = count, geom = "bar", fill = sentiment,
+      xlab = "Emotion and Sentiment", ylab = "Emotion Count") + ggtitle("Survey Sentiments") +
+      theme(axis.text.x = element_text(angle = 90))
+
+# Plot Two - Count of Words Associated With Each Sentiment, Expressed as a Percentage
+
+barplot(sort(colSums(prop.table(d[, 1:10]))), horiz = TRUE, cex.names = 0.7, las = 1,
+  main = "Emotions in Text", xlab = "Percentage", col = rainbow(10), 
+  xlim = c(0,.2))
+
+```
+
+Below we will see most frequent terms that appear more than 300 times. Followed by a breakdown of positive, negative, and neutral tweets. 
+
+``` {r different predictions, warning = FALSE}
+
+# Different Predictions
+
+dtm <- DocumentTermMatrix(corpus_clean)
+dim(dtm)
+
+dtm <- removeSparseTerms(dtm, 0.99)
+dim(dtm)
+
+# Inspecting the the First 10 Tweets and 10 Words in the Dataset
+
+freq <- sort(colSums(as.matrix(dtm)), decreasing = TRUE)
+
+findFreqTerms(dtm, lowfreq = 300) # Identifying Terms that Appears More than 300 Times
+
+wf <- data.frame(word = names(freq), freq = freq)
+
+# Word Clouds
+
+tweet3 <- tweet1 %>% select(text, senti)
+
+positive <- subset(tweet3, senti == "positive")
+positive_count <- positive %>% summarise(n())
+kable(positive[2:5,], format = "markdown")
+colnames(positive_count) <- c("Total Positive")
+positive_count
+
+#wordcloud(positive$text, max.words = 100, scale = c(3,0.5), colors = brewer.pal(8, "Dark2"))
+
+negative <- subset(tweet3, senti == "negative")
+negative_count <- negative %>% summarise(n())
+kable(negative[2:5,], format = "markdown")
+colnames(negative_count) <- c("Total Negative")
+negative_count
+
+#wordcloud(negative$text, max.words = 100, scale = c(3,0.5), colors = brewer.pal(8, "Dark2"))
+
+neutral <- subset(tweet3, senti == "neutral")
+neutral_count <- neutral %>% summarise(n())
+kable(neutral[2:5,], format = "markdown")
+colnames(neutral_count) <- c("Total Neutral")
+neutral_count
+
+#wordcloud(neutral$text, max.words = 100, scale = c(3,0.5), colors = brewer.pal(8, "Dark2"))
+
+set.seed(1234)
+wordcloud(words = wf$word, freq = wf$freq, min.freq = 1,
+          max.words = 200, random.order = FALSE, rot.per = 0.35, 
+          colors = brewer.pal(8, "Dark2"),
+          scale=c(3,0.5))
+
+```
+
+Now, we can look towards predicting. Naive Bayes (NB) trains on categorical data. We will convert the numeric data by creating a function to convert any non-zero positive value to *yes* and all zero values to *no* to state whether a specific term is present in the document. 
+
+The text corpus is stored as a dataframe and will need to merge that with the sentiment variable. 
+
+From there we can split the data set into training and test sets. 
+\
+
+``` {r testing DTMs}
+
+convert_count <- function(x) {
+  y <- ifelse(x > 0, 1,0)
+  y <- factor(y, levels = c(0,1), labels = c("No", "Yes"))
+  y
+}
+
+# Apply the Convert_Count Function to Get Final Training and Testing DTMs
+
+datasetNB <- apply(dtm, 2, convert_count)
+
+dataset <- as.data.frame(as.matrix(datasetNB))
+
+dataset$Class <- tweet3$senti
+
+set.seed(222)
+
+# split <- createDataPartition(dataset$Class, times = 1, p = 0.3, list = FALSE)
+# train_set <- dataset[-split,]
+# test_set <- dataset[split,]
+
+split <- sample(2, nrow(dataset), prob = c(0.75,0.25), replace = TRUE)
+train_set <- dataset[split == 1,]
+test_set <- dataset[split == 2,]
+
+kable(prop.table(table(train_set$Class)))
+kable(prop.table(table(test_set$Class)))
+
+```
+
+Random Forest is one of the well known and validated models available. It performed extremely well on this data set. 
+\
+
+``` {r random forest}
+
+
+rf_classifier <- randomForest(x = train_set[-1210], y = train_set$Class, ntree = 1000)
+
+rf_classifier
+
+# Predicting the Test Set Results
+
+rf_pred <- predict(rf_classifier, newdata = test_set[-1210])
+
+# Making the Confusion Matrix
+
+confusionMatrix(table(rf_pred, test_set$Class))
+
+
+```
+
+NB Classifier also performed very well. NB works on the assumption that the features of the dataset are independent of each other. Thus, giving it the name of "naive". It tends to work well for *bag-of-words* models like text documents because words are largely independent of each other. The location of a word does not typically depend on another word. Therefore, it is commonly used for text classifications, SA, spam filtering, and recommendation systems.
+\
+ 
+``` {r naive bayes}
+
+# Naive Bayes
+
+control <- trainControl(method = "repeatedcv", number = 10, repeats = 3)
+classifier_nb <- naiveBayes(train_set, train_set$Class, laplace = 1,
+                                          trControl = control, tuneLength = 7)
+
+nb_pred <- predict(classifier_nb, type = 'class', newdata = test_set)
+
+confusionMatrix(nb_pred, test_set$Class)
+
+svm_classifier <- svm(Class~., data = train_set)
+svm_classifier
+
+svm_pred <- predict(svm_classifier, test_set)
+
+confusionMatrix(svm_pred, test_set$Class)
+
+guess <- positive_count[1,]/(positive_count[1,] + negative_count[1,] + neutral_count[1,])
+guess <- percent(guess)
+
+```
+
+The Support Vector Machine (SVM) algorithm performed the worst. SVM is a powerful algorithm that finds the hyperplane that differentiates the two classes to be predicted, nicknamed *ham* and *spam*, and it does it very well. SVM can also perform linear and non-linear classification problems. However, it performed poorly. It still performed better (44% improvement) than if we had simply guessed *positive* for every single tweet `r guess`.
+\
+
+``` {r unknown}
+
+
+
+```
+# Conclusion
+
+Here, we ignored data like *usernames*, *time stamps*, if a tweet was *favorited*, *replied to*, *re-tweeted*, and details like *gps location*. These were ignored because they were not analogous or corresponding to data commonly found in survey data. 
+
+The prediction algorithms performed better than expected, but that may be due to this particular data set as they did not perform as well on another data set that was originally being analyzed. However, that data set proved to be problematic in other ways, thus was discarded as not helpful.
+
+This proof of concept is just that, a proof of concept. It is not holistically complete and capabilities are not limited to what is within this paper. However, survey data will necessitate the need to create specific functions, modifications, and resourcefulness that the performance of, is not available here. 
+
+Overall, this is a useful example of where we can see how much ML and data science can be used in HR applications. At the very least, it can be run against survey feedback to simply see what emotions are commonly found and what extremes may exist that may have not been recognized without these sorts of algorithms. Hopefully, more can be done to evaluate the survey data, but at a minimum, this may highlight data points that might have remained obscured and concealed by the noise and layers of digging into open-ended questions.
+\
+
+
+``` {r session info}
+
+sessionInfo()
+
+```
+
+``` {r runtime, echo = FALSE}
+
+end_time <- Sys.time()
+runtime <- end_time - start_time
+runtime
+stopCluster(cl) # Stops Parallel Processing
+
+```
