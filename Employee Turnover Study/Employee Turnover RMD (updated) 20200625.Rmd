@@ -1,0 +1,593 @@
+---
+title: "The Employee Attrition Dilemma:  \n*h2o, lime, and Machine Learning*"
+author: "Michael Vatt"
+date: "24 Jun 20"
+output:
+  pdf_document: 
+    toc: yes
+    toc_depth: 2
+  word_document:
+    toc: yes
+    toc_depth: '2'
+  html_document:
+    toc: yes
+    toc_depth: '2'
+    df_print: paged
+header-includes: \usepackage{xcolor}
+---
+
+```{r setup, include=FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(dev = 'pdf')
+
+```
+
+```{r, include=FALSE}
+
+options(tinytex.verbose = TRUE)
+
+```
+
+# Overview
+
+This white paper was motivated by the fact that employee turnover (attrition) is a major cost to an organization. Predicting turnover is paramount to any Human Resources division and OHR is no different.
+
+Historically, logistic regression or survival curves were mainstream to model employee attrition. Advancements in Machine Learning (ML) have enabled augmented predictive performance and improved explanatory analysis of the critical features linked to employee attrition. ML has technically been around since the beginning of the modern ideal of a computer with Alan Turing but the statistical methods giving birth to ML have existed, adapted, and improved for centuries. 
+
+This study on employee attrition will use two automated ML algorithm packages that are free to use to develop a predictive model that is in the same ballpark as high-end commercial products in terms of accuracy. We will use *h2o's* *h2o.automl()* function and then the *lime's* *lime()* function to enable a breakdown of complex, black-box ML models into variable importance plots. 
+
+This is holistically a **fictional dataset** created by IBM Watson - *all individuals, events, identifiable information (if any), and observations are entirely fictional*. 
+
+The outline of this study is as follows: (1) Necessary packages are installed, (2) Dataset is loaded and setup configured, (3) Data Wrangling, familiarization and pre-processing of the dataset are performed, (4) Initialize and establish h2o protocols, (5) Modeling development and training, (6) Performance Analysis, (7) Run lime against the datasets, (8) Plots, and (9) Conclusions.
+
+Performance analysis cannot be underestimated as it is critical to understand the ML algorithm and to identify whether it has concluded in informative and meaningful predictive probabilities. 
+
+- Let's Intall all Necessary Packages:
+
+```{r, echo = TRUE, message = FALSE, warning = FALSE, eval = TRUE}
+
+# Note: This Process Could Take a Couple of Minutes for Loading Required Packages
+
+install.packages("pacman", repos = "http://cran.us.r-project.org")
+
+pacman::p_load("anytime", "bit", "car", "caret", "caTools", "data.table", "doParallel", 
+                "dplyr", "e1071", "ggplot2", "ggpubr", "glmnet", "gridExtra", "h2o", "jsonlite", 
+                "knitr", "lava", "lime", "lubridate", "methods", "pdp", "RColorBrewer", "RCurl", 
+                "readr", "readxl", "rjson", "scales", "statmod", "scales", "stats", "stringi",
+                "stringr", "survival", "tibble", "tidyquant", "tidyr", "tidyverse", "timeDate", 
+                "tinytex", "tools", "utils", "versions", "vip")
+
+```
+
+## Introduction
+
+This ML algorithm is dependent upon employee attrition data from a fictional dataset created by IBM Watson. This dataset was motivated by exploratory data analysis to see how well *h2o* and *lime* would perform in ML compared to historical methods of predicting employee turnover. 
+
+Advances in ML have not only permitted for advanced predictions in employee attrition - both in methodology and accuracy - but also understanding the key variables - aka features - that influence turnover.
+
+The *h2o* package - using the *h2oautoml()* function - uses any dataset and automatically tests a number of advanced algorithms, such as random forests, ensemble methods, deep learning, as well as traditional methods, such as logistic regression. 
+
+The *lime* package - using the *lime()* function - helps expose the inner workings of black-boxes. One of the largest complaints of ML is that users see *inputs* and *outputs* but do not see - let alone understand - how the algorithm is performing its function(s). This is largely due to their complexity and the basis for their appropriate nomenclature as *black-boxes*. Think of black holes in outerspace - we know they exist, we know certain functions and behaviors, but we can't really inspect what is going on inside to see what it is accomplishing - same sort of idea. 
+
+This dataset includes the following variables: 
+\ 
+
+``` {r dataset variables, echo = FALSE}
+
+variables1 <- c("Age", "Attrition", "BusinessTravel", "DailyRate", "Department", "DistranceFromHome", "Education", "EducationField",
+                "EmployeeCount", "EmployeeNumber", "EmployeeSatisfaction", "Gender", "HourlyRate", "JobInvolvement", "JobLevel", "JobRole",
+                "JobSatisfaction", "MaritalStatus") 
+variables2 <- c("MonthlyIncome", "MonthlyRate", "NumCompaniesWorked", "Over18","OverTime",  "PercentSalaryHike", "PerformanceRating",
+                "RelationshipSatisfaction", "StandardHours", "StockOptionLevel", "TotalWorkingYears", "TriningTimesLastYear",
+                "WorkLifeBalance", "YearsAtCompany", "YearsInCurrentRole", "YearsSinceLastPromotion", "YearsWithCurrManager", "")
+df <- data.frame(variables1, variables2)
+knitr::kable(df, align = "ll")
+
+```
+
+## Objective
+
+With the help of these tools, our objective is to uncover critical variables in the employee attrition dilemma and endeavor to discover improved predictive accuracy and intelligibility of the problem compared to traditional and burdensome methods. 
+
+This study will show how the combination of *h2o* and *lime* packages can be used with improved success in the employee attrition dilemma. 
+
+## Dataset ##
+
+- WARNING: Some Models in this Project Require a Lot of Computing Power. Splitting the Cores Will Aid in Parallel Processing of CPUs.
+ 
+- NOTE: *h2o* uses advanced algorithms within SVM, RF, Deep Learning and others - this may take a few minutes.
+\
+
+``` {r split cores}
+
+split <- detectCores(TRUE)
+split # To Make Sure it Worked
+cl <- makePSOCKcluster(split)
+registerDoParallel(cl)
+
+```
+
+\
+
+``` {r load the dataset, include = FALSE}
+
+hr_data_raw <- read_excel("C:/My Desktop/OHR/Projects/WA_Fn-UseC_-HR-Employee-Attrition.xlsx")
+
+```
+
+# Methods and Analysis 
+
+## Exploratory Data Analysis 
+
+Now that the data is loaded, let's gain some familiarization with the Dataset and view the first 10 rows:
+\
+
+``` {r data familiarization}
+
+dim(hr_data_raw) # Dimensions of the Dataframe For Familiarity - This is Correct
+str(hr_data_raw) # Notice that Some Columns Are Not The Same Class
+class(hr_data_raw) # Let's Ensure it is Correct Format
+hr_data_raw[1:10,] # Does the Data Look Right? - Yes
+
+```
+
+We now need to perform a little bit of pre-processing to change character data types to factors. This is needed for *h2o* to function properly.
+\
+
+``` {r pre-processing}
+
+# The Attrition column is our target - we'll use all other Columns as features.
+
+# everything() selects all variables
+hr_data <- hr_data_raw %>% mutate_if(is.character, as.factor) %>% 
+  select(Attrition, everything()) 
+
+# Let's ensure it hasn't lost data
+
+glimpse(hr_data) # 1470 rows and 35 cols (features)
+
+```
+
+
+## Setting up h2o
+
+Next, we need to initialize the Java Virtual Machine (JVM) that *h2o* uses locally. Also, we will turn off output of progress bars so we aren't flooded with unnecessary detail at this time.
+\
+
+``` {r h2o initialization}
+
+h2o.init()
+h2o.no_progress()
+
+```
+
+Splitting the data into train, validation, and test sets is necessary in order to train the algorithm and then test how well it performs. 
+
+This is one sort of method -  many algorithms simply have train/test datasets - but adding a validation set enables an estimation of the model's skill while tuning the model's hyperparameters. 
+
+It is used to give an unbiased estimate of the final tuned model because the algorithm has not seen this data before; thus, it has not trained on this data. There are other methods to calculate an unbiased estimate as well (e.g. k-fold cross-validation).
+\
+
+``` {r splitting dataset}
+
+hr_data_h2o <- as.h2o(hr_data)
+
+split_h2o <- h2o.splitFrame(hr_data_h2o, c(0.7, 0.15), seed = 1234)
+
+train_h2o <- h2o.assign(split_h2o[[1]], "train" ) # 70%
+valid_h2o <- h2o.assign(split_h2o[[2]], "valid" ) # 15%
+test_h2o  <- h2o.assign(split_h2o[[3]], "test" )  # 15%
+
+```
+
+We are aiming to predict employee turnover (Attrition) and the features (other columns) are used to model the prediction. Thus, we set the names for the inputs into the model.
+\
+
+``` {r set names for h2o}
+
+y <- "Attrition"
+x <- setdiff(names(train_h2o), y)
+
+```
+
+## Data Analysis 
+
+We are now ready to run the automated ML function from the *h2o* package. 
+\
+
+``` {r automl(), warning = FALSE}
+
+# x = x: names of our feature columns
+# y = y: name of our target columns
+# training_frame = train_h2o: training set of 70% of the data
+# leaderboard_frame = valid_h2o: validation set of 15% of the data
+  # this is to ensure the model does not overfit the data
+# max_runtime_secs = 60: this is to speed up h2o's modeling
+  # algorithm has number of large complex models - this is expedition 
+  # at the expense of some accuracy
+
+automl_models_h2o <- h2o.automl(
+  x = x, 
+  y = y,
+  training_frame    = train_h2o,
+  leaderboard_frame = valid_h2o,
+  max_runtime_secs  = 60)
+
+```
+
+Let's extract the leader model and predict on hold-out set - *test_h2o*.
+
+All of the models are stored in the *automl_models_h2o* object. However, we really only care about the leader, which is the best model in terms of accuracy on the validation set. 
+\
+
+``` {r leader test}
+
+lb <- automl_models_h2o@leaderboard
+print(lb) # only printing out top 6
+
+# Extract leader model
+
+automl_leader <- automl_models_h2o@leader
+automl_leader
+
+```
+
+## Prediction, Test Performance, and Confusion Matrix
+
+Now we can predict on our test set, which is unseen from our modeling process - it is a true test of performance.
+\
+
+``` {r predict on test set}
+
+# Predict on hold-out set, test_h2o
+
+pred_h2o <- h2o.predict(object = automl_leader, newdata = test_h2o)
+
+```
+
+Here, we can evaluate our model - we'll reformat the test set to add the predictions column to analyze *actual* vs. *predictions* side-by-side
+\
+
+``` {r test performance}
+
+# Prep for performance assessment
+
+test_performance <- test_h2o %>%
+  tibble::as_tibble() %>%
+  select(Attrition) %>%
+  add_column(Predicted = as.vector(pred_h2o$predict)) %>%
+  mutate_if(is.character, as.factor)
+head(test_performance, n = 10) %>% kable(align = "cc")
+# prints first 10 rows
+
+```
+
+We can use the *table()* function to quickly get a confusion table of the results. In the field of ML, a **confusion matrix** is a specific table layout that allows the visualization of the performance of an algorithm. 
+
+We see that the leader model wasn't perfect, but it did a decent job at identifying employees that are likely to quit. For perspective, a logistic regression would not perform nearly this well
+\
+
+``` {r confusion matrix}
+# Confusion table counts
+
+confusion_matrix <- test_performance %>% table() 
+#confusion_matrix %>% kable(caption = "Predicted")
+cm <- confusionMatrix(reference = test_performance$Attrition, data = test_performance$Predicted)
+
+draw_confusion_matrix <- function(cm) {
+
+  layout(matrix(c(1,1,2)))
+  par(mar=c(2,2,2,2))
+  plot(c(100, 345), c(300, 450), type = "n", xlab="", ylab="", xaxt='n', yaxt='n')
+  title('CONFUSION MATRIX', cex.main=2)
+
+  # create the matrix 
+  rect(150, 430, 240, 370, col='#3F97D0')
+  text(195, 435, 'No', cex=1.2)
+  rect(250, 430, 340, 370, col='#F7AD50')
+  text(295, 435, 'Yes', cex=1.2)
+  text(125, 370, 'Predicted', cex=1.3, srt=90, font=2)
+  text(245, 450, 'Actual', cex=1.3, font=2)
+  rect(150, 305, 240, 365, col='#F7AD50')
+  rect(250, 305, 340, 365, col='#3F97D0')
+  text(140, 400, 'No', cex=1.2, srt=90)
+  text(140, 335, 'Yes', cex=1.2, srt=90)
+
+  # add in the cm results 
+  res <- as.numeric(cm$table)
+  text(195, 400, res[1], cex=1.6, font=2, col='white')
+  text(195, 335, res[2], cex=1.6, font=2, col='white')
+  text(295, 400, res[3], cex=1.6, font=2, col='white')
+  text(295, 335, res[4], cex=1.6, font=2, col='white')
+
+ }  
+
+draw_confusion_matrix(cm)
+
+```
+
+Now that we see the output from the confusion matrix, We can run through a binary classification analysis to understand the model's performance.
+\
+
+``` {r performance analysis}
+
+tn <- confusion_matrix[1] # true negatives
+tp <- confusion_matrix[4] # true positives
+fp <- confusion_matrix[3] # false positives
+fn <- confusion_matrix[2] # false negatives
+
+accuracy <- (tp + tn) / (tp + tn + fp + fn)
+misclassification_rate <- 1 - accuracy
+recall <- tp / (tp + fn)
+precision <- tp / (tp + fp)
+null_error_rate <- tn / (tp + tn + fp + fn)
+
+# Changed to percentages since that is usually easier to interpret
+
+percentage <- c(percent(accuracy), percent(misclassification_rate), percent(recall), percent(precision), percent(null_error_rate))
+row_names <- c("Accuracy", "Misclassification Rate", "Recall", "Precision", "Null Error Rate")
+df <- data.frame(row_names, percentage)
+colnames(df) <- c("Evaluation Method", "Percentage")
+df %>% kable() 
+
+
+```  
+
+# What Does This All Mean?
+
+## Analytical Development
+
+**NOTE:** It is important to understand that accuracy can be misleading. `r percent(accuracy)` accuracy sounds pretty good - especially for modeling HR data. But if we simply just picked Attrition = No on every employee, we would get an accuracy of about `r percent(null_error_rate)`. That doesn't sound so great now does it?
+
+*Precision* is when the model predicts yes, how often it is actually yes. 
+
+*Recall* (aka true positive rate or specificity) is when the actual value is yes, how often the model is correct.
+
+Most HR divisions would rather incorrectly classify folks not looking to quit as high potential than classify those likely to quit as not at risk. This means that HR will then care about *Recall*.
+
+As stated, Recall - when the actual value is Attrition = YES, how often that model predicts YES.
+
+Recall for our model is `r percent(recall)` - in an HR context, there are `r percent(recall)` more employees that could potentially be targeted prior to quitting. Let's say an organization loses 100 employees per year, they could possibly target `r round((recall * 100), digits = 0)` of them, implementing measures to retain valuable employees.
+
+Thus far, we have a very good model that is capable of making very accurate predictions on unseen data, but what can it tell us about what causes attrition? This is where we can use *lime*. 
+
+## Setting Up lime
+
+The *lime* package implements *lime()* in R. 
+
+**NOTE:** *lime* is not setup out-of-the-box to work with *h2o* but two custom functions will enable everything to work smoothly:
+
+ - *model_type*: Tells *lime* what type of model we are dealing with.
+ - *predict_model*: Allows *lime* to perform predictions that its algorithm can interpret.
+\
+
+``` {r set up lime 1}
+
+# Build Model Type function for congruence with h2o
+
+model_type.H2OBinomialModel <- function(x, ...) {
+  
+  # Function tells lime() what model type we are dealing with
+  # 'classification', 'regression', 'survival', 'clustering', 'multilabel', etc
+  #
+  # x is our h2o model
+  
+  return("classification")
+}
+
+```
+
+The trick here is to realize that its inputs **must** be: 'x' (a model), 'newdata' (a dataframe object - this is essential), and 'type' (not used, but can be used to switch the output type).
+
+Output is also tricky because it **must** be in the format of probabilities by classification.
+\
+
+``` {r set up lime 2}
+
+# Build predict_model function
+
+predict_model.H2OBinomialModel <- function(x, newdata, type, ...) {
+  
+  # Function performs prediction and returns dataframe with Response
+  #
+  # x is h2o model
+  # newdata is data frame
+  # type is only setup for data frame
+  
+  pred <- h2o.predict(x, as.h2o(newdata))
+  
+  # return probs
+  return(as.data.frame(pred[,-1]))
+  
+}
+
+```
+
+We can run the next script to show what the output looks like and test our predict_model function.
+\
+
+``` {r test prediction model, warning = FALSE}
+
+# Test our predict_model() function
+
+pm <- predict_model(x = automl_leader, newdata = as.data.frame(test_h2o[,-1]), type = 'raw')
+pm$EmpID <- seq.int(nrow(pm)) 
+pm <- pm[c(3,1,2)]
+kable(pm[1:10,], align = "ccc") 
+
+```
+
+Now, for the fun part, we create an explainer using the *lime()* function by passing the training dataset without the *Attribution* column. It must be a data frame - this is important. Our *predict_model()* function will transform it into an *h2o* object. 
+
+We will set **model = automl_leader** and **bin_continuous = FALSE**. We could do bin_continuous variables, but this may not make sense for categorical numeric data that we didn't coerce into factors. 
+\
+
+``` {r run lime on training set, warning = FALSE}
+
+# Run lime() on training set
+
+explainer <- lime::lime(as.data.frame(train_h2o[,-1]), model = automl_leader, 
+                        bin_continuous = FALSE)
+
+```
+
+Next, we will run *explain()*, which returns our explanation. This can take a few minutes to run, so we will limit it to the first 10 rows of the test dataset.
+
+We will set **n_labels = 1** because we care about explaining a single class. Also, setting **n_features = 5** will return the top five fetaures that are critical to each case. Lastly, setting *kernel_width = 0.5** allows us to increase the *model_r2* value by shrinking the localized evaluation. 
+\
+
+``` {r run explain() on explainer, warning = FALSE}
+
+# Run explain() on explainer
+
+explanation <- lime::explain(
+  as.data.frame(test_h2o[1:10,-1]), 
+  explainer    = explainer, 
+  n_labels     = 1, 
+  n_features   = 5,
+  kernel_width = 0.5)
+
+```
+
+## Feature Importance Visualization
+
+The payoff for all this work is the *Feature Importance Plot*. We can visualize each of the ten cases - *observations* - from the test dataset. The top four features for each case are shown. **NOTE:** they are not the same for each case. *Blue* bars mean that the feature **supports** the model conclusion, *Red* bars **contradict**.
+
+Focus on the cases with **Label = YES** - which are predicted to have attrition. Are there commonalities? Common themes may only exist in a couple cases, but they can be used to potentially generalize to the larger population.
+\
+
+``` {r feature importance visualization, fig.height = 10, fig.width = 8}
+
+plot_features(explanation) +
+  labs(title = "HR Predictive Analytics: LIME Feature Importance Visualization",
+       subtitle = "Hold Out (Test) Set, First 10 Cases Shown")
+
+```
+
+\
+
+``` {r feature explanations}
+
+plot_explanations(explanation) 
+
+```
+
+Did we discover what features are linked to Employee Attrition? Overtime seems to be the largest motivator for attrition.
+\
+
+``` {r critical features of attrition}
+
+# Focus on critical features of attrition
+
+attrition_critical_features <- hr_data %>%
+  select(Attrition, TrainingTimesLastYear, JobRole, OverTime, NumCompaniesWorked, 
+         Age, YearsSinceLastPromotion) %>% rowid_to_column(var = "Case")
+kable(attrition_critical_features[1:10,2:7], align = "cccccccc")
+
+```
+
+# What are the Indicators?
+
+## Charts
+
+### Training
+
+``` {r Training violin plot, warning = FALSE}
+
+attrition_critical_features %>% ggplot(aes(Attrition, TrainingTimesLastYear)) + 
+  geom_jitter(alpha = 0.5, fill = palette_light()[[1]]) + 
+  geom_violin(alpha = 0.7, fill = palette_light()[[1]]) +
+  theme_tq() + 
+  labs(title = "Prevalence of Training is Lower in Attrition = YES",
+    subtitle = "Suggests that increased training is related to lower attrition")
+
+```
+
+### Job Role
+
+``` {r JobRole violin plot}
+
+attrition_critical_features %>% group_by(JobRole, Attrition) %>% 
+  summarize(total = n()) %>% spread(key = Attrition, value = total) %>%
+  mutate(pct_attrition = Yes / (Yes + No)) %>%
+  ggplot(aes(x = forcats::fct_reorder(JobRole, pct_attrition), y = pct_attrition)) + 
+  geom_bar(stat = "identity", alpha = 1, fill = palette_light()[[1]]) + 
+  expand_limits(y = c(0,1)) + coord_flip() + theme_tq() + 
+  labs(title = "Attrition Varies by Job Role", 
+       subtitle = "Higher Percetange, Higher Turnover",
+       y = "Attrition Percentage", 
+       x = "Job Role")
+
+```
+
+### Overtime
+
+``` {r OT violin plot}
+  
+attrition_critical_features %>% mutate(OverTime = case_when(
+  OverTime == "Yes" ~ 1, 
+  OverTime == "No" ~ 0)) %>% 
+  ggplot(aes(Attrition, OverTime)) + geom_jitter(alpha = 0.5, 
+    fill = palette_light()[[1]]) + geom_violin(alpha = 0.7, 
+    fill = palette_light()[[1]]) + theme_tq() +
+  labs(title = "Prevlance of OverTime is Higher in Attrition = YES",
+       subtitle = "Suggests increased OverTime is related to higher attrition")
+
+```
+
+### Age
+
+``` {r age violin plot}
+
+attrition_critical_features %>% ggplot(aes(Attrition, Age)) + 
+  geom_jitter(alpha = 0.5, fill = palette_light()[[1]]) + 
+  geom_violin(alpha = 0.7, fill = palette_light()[[1]]) +
+  theme_tq() + 
+  labs(title = "Prevalence of Age",
+       subtitle = "Suggests that Age is related to Attrition from 20-35.")
+
+
+```
+
+### Number of Companies Employee has Worked For
+
+``` {r NumCompaniesWorkedFor violin plot}
+
+attrition_critical_features %>% ggplot(aes(Attrition, NumCompaniesWorked)) + 
+  geom_jitter(alpha = 0.5, fill = palette_light()[[1]]) + 
+  geom_violin(alpha = 0.7, fill = palette_light()[[1]]) +
+  theme_tq() + 
+  labs(title = "Prevalence of Number of Companies Worked For",
+       subtitle = "Suggests that this supports attrition when greater than 4.")
+
+```
+
+### Years Since Last Promotion
+
+``` {r promotion violin plot}
+
+attrition_critical_features %>% ggplot(aes(Attrition, YearsSinceLastPromotion)) + 
+  geom_jitter(alpha = 0.5, fill = palette_light()[[1]]) + 
+  geom_violin(alpha = 0.7, fill = palette_light()[[1]]) +
+  theme_tq() + 
+  labs(title = "Prevalence of Years Since Last Promotion",
+       subtitle = "Suggests some support of attrition when greater than 3 years.")
+
+```
+
+# Conclusions
+
+The *autoML* algorithm from *H2O.ai* worked well for classifying attrition with an accuracy around `r percent(accuracy)` on unseen / unmodeled data. 
+
+We then used *lime* to breakdown the complex ensemble model returned from *h2o* into critical features that are related to attrition. 
+
+Overall, this is a really useful example of where we can see how much ML and DS can be used in HR applications. These packages may be able to support OHR and augment the current attrition models. 
+
+``` {r session info}
+
+sessionInfo()
+
+```
+
+
