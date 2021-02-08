@@ -52,7 +52,7 @@ registerDoParallel(cl)
 # download.file("https://github.com/lkolodziejek/VideoGameSales/blob/master/Video_Games_Sales_as_at_22_Dec_2016.csv", dl)
 # vgs <- fread("Video_Games_Sales_as_at_22_Dec_2016.csv", header=TRUE)
 
-data <- read.csv("https://raw.githubusercontent.com/mjvatt/Create-Your-Own-Capstone-Project/master/Video_Games_Sales_as_at_22_Dec_2016.csv")
+data <- read.csv("https://raw.githubusercontent.com/mjvatt/Machine-Learning/main/Harvard%20Capstone/Video_Games_Sales_as_at_22_Dec_2016.csv")
 vgs <- data.frame(data)
 
 # Familiarization with the Dataset:
