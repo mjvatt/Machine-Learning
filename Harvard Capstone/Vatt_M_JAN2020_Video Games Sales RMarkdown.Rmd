@@ -87,7 +87,7 @@ Let’s Load the Dataset from a CSV File Located in my GitHub Account
 ``` {r load the dataset}
 
 file <- tempfile()
-download.file("https://raw.githubusercontent.com/mjvatt/Create-Your-Own-Capstone-Project/master/Video_Games_Sales_as_at_22_Dec_2016.csv", file)
+download.file("https://raw.githubusercontent.com/mjvatt/Machine-Learning/main/Harvard%20Capstone/Video_Games_Sales_as_at_22_Dec_2016.csv", file)
 vgs <- fread("Video_Games_Sales_as_at_22_Dec_2016.csv", header = TRUE)
 
 ```
