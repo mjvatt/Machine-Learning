@@ -1,6 +1,6 @@
 # Machine Learning
 
-## This repo is to answer issues, questions, data set topics, and explore learning new techniques
+## This repo is to answer issues, questions, data set topics, and explore learning new techniques within ML
 
 - Image Compression using K-means in R
 - Multivariate Linear Regression to Predict Housing Prices
